@@ -1490,89 +1490,87 @@
 
 
     async function loadYouTubeData() {
+  const status = document.getElementById("apiStatus");
 
-      const status = document.getElementById("apiStatus");
+  try {
+    status.className = "status-box";
+    status.textContent = "Loading real YouTube data...";
 
-      try {
+    const regularIds = VIDEO_LINKS
+      .map(extractVideoId)
+      .filter(Boolean);
 
-        status.className = "status-box";
-        status.textContent =
-          "Loading real YouTube data...";
+    const shortIds = SHORTS_LINKS
+      .map(extractVideoId)
+      .filter(Boolean);
 
-        const regularIds = VIDEO_LINKS
-          .map(extractVideoId)
-          .filter(Boolean);
+    const uniqueIds = [
+      ...new Set([...regularIds, ...shortIds])
+    ];
 
-        const shortIds = SHORTS_LINKS
-          .map(extractVideoId)
-          .filter(Boolean);
+    // Videos API — this is the important part
+    const videoItems = await fetchYouTubeVideos(uniqueIds);
 
-        const uniqueIds = [
-          ...new Set([
-            ...regularIds,
-            ...shortIds
-          ])
-        ];
+    const apiMap = new Map(
+      videoItems.map(item => [item.id, item])
+    );
 
-        const [videoItems, fetchedChannel] =
-          await Promise.all([
-            fetchYouTubeVideos(uniqueIds),
-            fetchChannel()
-          ]);
+    allVideos = regularIds
+      .map(id => makeVideoObject(apiMap.get(id), "video"))
+      .filter(Boolean);
 
-        channelData = fetchedChannel;
+    allShorts = shortIds
+      .map(id => makeVideoObject(apiMap.get(id), "short"))
+      .filter(Boolean);
 
-        const apiMap = new Map(
-          videoItems.map(item => [item.id, item])
-        );
+    // Channel API is optional
+    try {
+      channelData = await fetchChannel();
+    } catch (channelError) {
+      console.warn(
+        "Channel API failed:",
+        channelError
+      );
 
-        allVideos = regularIds
-          .map(id => makeVideoObject(
-            apiMap.get(id),
-            "video"
-          ))
-          .filter(Boolean);
-
-        allShorts = shortIds
-          .map(id => makeVideoObject(
-            apiMap.get(id),
-            "short"
-          ))
-          .filter(Boolean);
-
-        updateChannelUI();
-
-        renderVideos();
-        renderShorts();
-
-        status.style.display = "none";
-
-      } catch (error) {
-
-        console.error(error);
-
-        status.className =
-          "status-box error-box";
-
-        status.innerHTML = `
-          <strong>YouTube data could not be loaded.</strong>
-          <br><br>
-          ${escapeHTML(error.message)}
-          <br><br>
-          No fake views or fake metadata will be shown.
-          <br>
-          Check your API key, Channel ID and API restrictions.
-        `;
-
-        allVideos = [];
-        allShorts = [];
-
-        renderVideos();
-        renderShorts();
-
-      }
-
+      channelData = null;
     }
+
+    updateChannelUI();
+    renderVideos();
+    renderShorts();
+
+    if (!allVideos.length && !allShorts.length) {
+      throw new Error(
+        "YouTube returned no videos. Check your video IDs and API key."
+      );
+    }
+
+    status.style.display = "none";
+
+  } catch (error) {
+
+    console.error(error);
+
+    status.className = "status-box error-box";
+
+    status.innerHTML = `
+      <strong>YouTube video data could not be loaded.</strong>
+      <br><br>
+      ${escapeHTML(error.message)}
+      <br><br>
+      No fake views or fake metadata are being used.
+      <br>
+      Check your API key, YouTube Data API v3 access,
+      and API restrictions.
+    `;
+
+    allVideos = [];
+    allShorts = [];
+
+    renderVideos();
+    renderShorts();
+  }
+}
 
 
     function makeVideoObject(item, type) {
